@@ -16,10 +16,6 @@ export default function QuoteHistory({
   const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
   const [quoteConfig, setQuoteConfig] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
-  
-  // Modal states
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [selectedQuoteForPreview, setSelectedQuoteForPreview] = useState<any>(null);
 
   const fetchQuotes = async () => {
     setIsLoadingQuotes(true);
@@ -165,14 +161,15 @@ export default function QuoteHistory({
     fetchQuoteConfig();
     fetchProducts();
   }, []);
-  // Filtering state - now managed internally
+
+  // Filtering state
   const [filteredQuotes, setFilteredQuotes] = useState<any[]>(quotes);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchCategory, setSearchCategory] = useState('quoteReference');
   const [statusFilter, setStatusFilter] = useState('all');
   const [createdByFilter, setCreatedByFilter] = useState('all');
 
-  // Filtering functions - now managed internally
+  // Filtering functions
   const applyFilters = () => {
     let filtered = [...quotes];
 
@@ -223,26 +220,49 @@ export default function QuoteHistory({
     setCreatedByFilter('all');
   };
 
-  // Date picker state - now managed internally
+  // Date picker state
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
-  // Delete confirmation state - now managed internally
+  // Delete confirmation state
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [quoteToDelete, setQuoteToDelete] = useState<any>(null);
 
-  // Quote modal state - now managed internally
-  const [showQuoteModal, setShowQuoteModalInternal] = useState(false);
-  const [selectedQuote, setSelectedQuoteInternal] = useState<any>(null);
+  // Preview modal state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewQuote, setPreviewQuote] = useState<any | null>(null);
 
-  // Quote action handlers - now managed internally
-  const handleGenerateQuote = () => {
-    setShowQuoteForm(true);
+  // Mark a draft quote as generated
+  const handleGenerateQuoteFromPreview = async (quote: any) => {
+    try {
+      const response = await fetch('/api/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          quoteId: quote.id,
+          quote: {
+            ...quote,
+            status: 'generated',
+          }
+        }),
+      });
+      if (response.ok) {
+        setIsPreviewOpen(false);
+        await fetchQuotes();
+      } else {
+        console.error('Failed to generate quote');
+        alert('Failed to generate quote.');
+      }
+    } catch (e) {
+      console.error('Error generating quote:', e);
+      alert('Error generating quote.');
+    }
   };
 
-  const handleViewQuote = (quote: any) => {
-    setSelectedQuoteForPreview(quote);
-    setShowPreviewModal(true);
+  // Quote action handlers
+  const handleGenerateQuote = () => {
+    setShowQuoteForm(true);
   };
 
   const handleDuplicateQuote = (quote: any) => {
@@ -319,8 +339,7 @@ export default function QuoteHistory({
         // Close modals
         setShowDeleteConfirmation(false);
         setQuoteToDelete(null);
-        // Refresh quotes list by calling the parent's fetch function
-        // We'll need to add a prop for this
+        // Refresh quotes list
         window.location.reload(); // Temporary solution
       } else {
         console.error('Failed to delete quote');
@@ -337,6 +356,31 @@ export default function QuoteHistory({
 
   return (
     <div className="space-y-8">
+      {/* Centralized Quote Preview modal (controlled) */}
+      {previewQuote && (
+        <QuotePreview
+          quote={previewQuote}
+          isOpenExternal={isPreviewOpen}
+          onRequestClose={() => setIsPreviewOpen(false)}
+          onEditQuote={(q) => {
+            setIsPreviewOpen(false);
+            handleEditQuote(q);
+          }}
+          onViewQuote={(q) => {
+            setIsPreviewOpen(false);
+            handleViewQuoteForm(q);
+          }}
+          onDuplicateQuote={(q) => {
+            setIsPreviewOpen(false);
+            handleDuplicateQuote(q);
+          }}
+          onDeleteQuote={(q) => {
+            setIsPreviewOpen(false);
+            handleDeleteQuote(q);
+          }}
+          onGenerateQuote={handleGenerateQuoteFromPreview}
+        />
+      )}
       {/* Header with Generate Quote Button */}
       <div className="flex justify-between items-center">
         <div>
@@ -344,7 +388,7 @@ export default function QuoteHistory({
           <p className="text-gray-600">View and manage all your generated quotes</p>
         </div>
         <button
-                          onClick={handleGenerateQuote}
+          onClick={handleGenerateQuote}
           className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3 px-8 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center space-x-2"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -478,134 +522,146 @@ export default function QuoteHistory({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredQuotes.map((quote, index) => (
-                  <tr
-                    key={index}
-                    className="hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
-                    onClick={() => handleViewQuote(quote)}
-                  >
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-center">
-                        <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${quote.status === 'draft'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-green-100 text-green-700'
-                          }`} title={quote.status === 'draft' ? 'Draft' : 'Generated'}>
-                          {quote.status === 'draft' ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900">
-                          {quote.quoteReference || 'Untitled Quote'}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {quote.clientEmail}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {quote.clientName}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {quote.companyName || '-'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {new Date(quote.createdAt).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        Guest
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-center space-x-2">
-                        {quote.status === 'draft' ? (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditQuote(quote);
-                              }}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-blue-100 hover:bg-blue-200 text-blue-700"
-                              title="Edit Quote"
-                            >
+                {filteredQuotes.map((quote, index) => {
+                  const { items, total } = transformQuoteData(quote, products);
+                  const normalizedStatus = String(quote.status || '').toLowerCase();
+                  const quoteWithItems = { ...quote, items, total, status: normalizedStatus };
+
+                  return (
+                    <tr
+                      key={index}
+                      className="hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+                      onClick={() => {
+                        setPreviewQuote(quoteWithItems);
+                        setIsPreviewOpen(true);
+                      }}
+                    >
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center">
+                          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${quote.status === 'draft'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-green-100 text-green-700'
+                            }`} title={quote.status === 'draft' ? 'Draft' : 'Generated'}>
+                            {quote.status === 'draft' ? (
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDuplicateQuote(quote);
-                              }}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-purple-100 hover:bg-purple-200 text-purple-700"
-                              title="Duplicate Quote"
-                            >
+                            ) : (
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteQuote(quote);
-                              }}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-red-100 hover:bg-red-200 text-red-700"
-                              title="Delete Quote"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewQuoteForm(quote);
-                              }}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-green-100 hover:bg-green-200 text-green-700"
-                              title="View Quote"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDuplicateQuote(quote);
-                              }}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-purple-100 hover:bg-purple-200 text-purple-700"
-                              title="Duplicate Quote"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {quote.quoteReference || 'Untitled Quote'}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {quote.clientEmail}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">
+                          {quote.clientName}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">
+                          {quote.companyName || '-'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">
+                          {new Date(quote.createdAt).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">
+                          Guest
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center space-x-2">
+                          {quote.status === 'draft' ? (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditQuote(quote);
+                                }}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-blue-100 hover:bg-blue-200 text-blue-700"
+                                title="Edit Quote"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDuplicateQuote(quote);
+                                }}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-purple-100 hover:bg-purple-200 text-purple-700"
+                                title="Duplicate Quote"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteQuote(quote);
+                                }}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-red-100 hover:bg-red-200 text-red-700"
+                                title="Delete Quote"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewQuoteForm(quote);
+                                }}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-green-100 hover:bg-green-200 text-green-700"
+                                title="View Quote"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDuplicateQuote(quote);
+                                }}
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 bg-purple-100 hover:bg-purple-200 text-purple-700"
+                                title="Duplicate Quote"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -736,68 +792,6 @@ export default function QuoteHistory({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Quote Preview Modal */}
-      {showQuoteModal && selectedQuote && quoteConfig && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-6xl mx-4 max-h-[95vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Quote Preview & PDF</h3>
-              <div className="flex space-x-3">
-                {selectedQuote.status === 'draft' && (
-                  <>
-                    <button
-                      onClick={() => {
-                        handleEditQuote(selectedQuote);
-                        setShowQuoteModalInternal(false);
-                      }}
-                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-semibold text-sm"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleDuplicateQuote(selectedQuote);
-                        setShowQuoteModalInternal(false);
-                      }}
-                      className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 font-semibold text-sm"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      Duplicate
-                    </button>
-                  </>
-                )}
-                <button
-                  onClick={() => setShowQuoteModalInternal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {(() => {
-              const { items, total } = transformQuoteData(selectedQuote, products);
-              return (
-                <QuotePreview
-                  clientName={selectedQuote.clientName}
-                  items={items}
-                  total={total}
-                  config={quoteConfig}
-                  onClose={() => setShowQuoteModalInternal(false)}
-                />
-              );
-            })()}
           </div>
         </div>
       )}
