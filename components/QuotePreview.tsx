@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -42,6 +42,16 @@ export default function QuotePreview({
       setIsOpen(false);
     }
   };
+
+  // Lock background scroll when modal is open
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isModalOpen]);
 
   const downloadPDF = async () => {
     if (!quoteRef.current) return;
@@ -153,54 +163,102 @@ export default function QuotePreview({
       {/* Modal Overlay */}
       {isModalOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
           onClick={(e) => { e.stopPropagation(); handleClose(); }}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-6xl mx-4 max-h-[95vh] overflow-y-auto"
+            className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-3xl mx-4 max-h-[95vh] overflow-y-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
+            {/* Modal Header with Title, Status and Actions */}
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-900">Quote Preview</h3>
-              <button
-                onClick={handleClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+              <div className="flex items-center gap-3">
+                <h3 className="text-2xl font-bold text-gray-900">Quote Preview</h3>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                }`}>
+                  {isDraft ? 'Draft' : isCompleted ? 'Completed' : 'Generated'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {isGenerated && (
+                  <button
+                    onClick={downloadPDF}
+                    className="hidden sm:inline-flex bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-3 rounded-lg transition-colors duration-200"
+                  >
+                    Download
+                  </button>
+                )}
+                {isDraft && (
+                  <button
+                    onClick={handleGenerateQuote}
+                    className="hidden sm:inline-flex bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 px-3 rounded-lg transition-colors duration-200"
+                  >
+                    Generate Quote
+                  </button>
+                )}
 
-            {/* Quote Details */}
-            <div className="mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Quote Reference</h4>
-                  <p className="text-gray-600">{quote.quoteReference || 'Untitled Quote'}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Client</h4>
-                  <p className="text-gray-600">{quote.clientName}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Company</h4>
-                  <p className="text-gray-600">{quote.companyName || '-'}</p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Status</h4>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                  }`}>
-                    {isDraft ? 'Draft' : isCompleted ? 'Completed' : 'Generated'}
-                  </span>
-                </div>
+                {isDraft && (
+                  <button
+                    onClick={handleEditQuote}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors duration-200"
+                    title="Edit Quote"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                )}
+
+                {isGenerated && (
+                  <button
+                    onClick={handleViewQuote}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-green-100 hover:bg-green-200 text-green-700 transition-colors duration-200"
+                    title="View Quote"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleDuplicateQuote}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors duration-200"
+                  title="Duplicate Quote"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+
+                {isDraft && (
+                  <button
+                    onClick={handleDeleteQuote}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-100 hover:bg-red-200 text-red-700 transition-colors duration-200"
+                    title="Delete Quote"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleClose}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
 
-            {/* Quote Document */}
-            <div ref={quoteRef} className="bg-white border border-gray-200 rounded-lg p-8 max-w-2xl mx-auto">
+            {/* PDF Preview */}
+            <div ref={quoteRef} className="bg-white border border-gray-200 rounded-lg p-6 max-w-[800px] mx-auto">
               {/* Header */}
               <div className="border-b border-gray-200 pb-6 mb-6">
                 <div className="flex justify-between items-start">
@@ -282,85 +340,15 @@ export default function QuotePreview({
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3 justify-center mt-6">
-              {/* Normal Buttons */}
-              {isGenerated && (
-                <button
-                  onClick={downloadPDF}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200"
-                >
-                  Download Quote
-                </button>
-              )}
-              
-              {isDraft && (
-                <button
-                  onClick={handleGenerateQuote}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200"
-                >
-                  Generate Quote
-                </button>
-              )}
-
-              {/* Icon Buttons */}
-              <div className="flex gap-2">
-                {isDraft && (
-                  <button
-                    onClick={handleEditQuote}
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors duration-200"
-                    title="Edit Quote"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                )}
-
-                {isGenerated && (
-                  <button
-                    onClick={handleViewQuote}
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-100 hover:bg-green-200 text-green-700 transition-colors duration-200"
-                    title="View Quote"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </button>
-                )}
-
-                <button
-                  onClick={handleDuplicateQuote}
-                  className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors duration-200"
-                  title="Duplicate Quote"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </button>
-
-                {isDraft && (
-                  <button
-                    onClick={handleDeleteQuote}
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-100 hover:bg-red-200 text-red-700 transition-colors duration-200"
-                    title="Delete Quote"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
+            {/* Action Buttons moved to header (above) */}
           </div>
         </div>
       )}
 
       {/* Generate Quote Confirmation Modal */}
       {showGenerateConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowGenerateConfirmation(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="text-center">
               <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
