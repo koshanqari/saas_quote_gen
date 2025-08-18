@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       address,
       default_currency,
       default_tax_rate,
+      validity_days,
       terms_and_conditions,
       footer_message
     } = body;
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       address,
       default_currency,
       default_tax_rate: parseFloat(default_tax_rate) || 0,
+      validity_days: parseInt(validity_days) || 30,
       terms_and_conditions,
       footer_message,
     };
