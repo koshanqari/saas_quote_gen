@@ -266,11 +266,13 @@ export default function QuoteHistory({
   };
 
   const handleDuplicateQuote = (quote: any) => {
-    // Create a copy of the quote with modified reference
+    // Create a copy of the quote with modified reference and new timestamp
     const quoteCopy = {
       ...quote,
       quoteReference: `${quote.quoteReference} (Copy)`,
-      id: undefined // Remove the original ID for the copy
+      id: undefined, // Remove the original ID for the copy
+      createdAt: new Date().toISOString(), // Set new creation time
+      quotation_num: undefined // Remove quotation number for the copy
     };
     
     // Set the quote data and show the form
@@ -513,7 +515,7 @@ export default function QuoteHistory({
               <thead className="bg-gradient-to-r from-blue-50 to-purple-50">
                 <tr>
                   <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900 w-8"></th>
-                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900 w-1/4">Quote Reference</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900 w-1/5">Quote Reference</th>
                   <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900 w-1/6">Client</th>
                   <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900 w-1/6">Company</th>
                   <th className="px-4 py-4 text-left text-sm font-semibold text-gray-900 w-1/8">Created</th>
@@ -563,6 +565,11 @@ export default function QuoteHistory({
                           <div className="text-xs text-gray-500 mt-1">
                             {quote.clientEmail}
                           </div>
+                          {quote.quotation_num && (
+                            <div className="text-xs text-blue-600 font-medium mt-1">
+                              #{quote.quotation_num}
+                            </div>
+                          )}
                         </div>
                       </td>
 

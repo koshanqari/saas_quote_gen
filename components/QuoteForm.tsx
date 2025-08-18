@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Product } from '@/lib/csv-utils';
+import QuoteCostSummary from './QuoteCostSummary';
 
 interface QuoteFormProps {
   products: Product[];
@@ -159,7 +160,7 @@ export default function QuoteForm({ products, onCancel, initialData }: QuoteForm
             productConfigurations,
             discounts,
             status: 'draft',
-            createdAt: initialData?.createdAt || new Date().toISOString()
+            createdAt: initialData?.id ? initialData.createdAt : new Date().toISOString()
           };
 
           const response = await fetch('/api/quotes', {
@@ -200,8 +201,8 @@ export default function QuoteForm({ products, onCancel, initialData }: QuoteForm
             customRequirements,
             productConfigurations,
             discounts,
-            createdAt: initialData?.createdAt || new Date().toISOString(),
-            status: 'draft'
+            createdAt: initialData?.id ? initialData.createdAt : new Date().toISOString(),
+            status: 'generated' // Changed from 'draft' to 'generated' to trigger quotation number generation
           };
 
           const response = await fetch('/api/quotes', {
@@ -562,7 +563,7 @@ export default function QuoteForm({ products, onCancel, initialData }: QuoteForm
               </div>
             </div>
             <div className="mt-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Additional Notes or Requirements</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Additional Notes or Requirements (for personal use only)</label>
               <textarea
                 value={clientInfo.additionalNotes}
                 onChange={(e) => handleInputChange('additionalNotes', e.target.value)}
@@ -1159,341 +1160,12 @@ export default function QuoteForm({ products, onCancel, initialData }: QuoteForm
           </div>
 
           {/* Quote Summary Section */}
-          <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-2xl p-6 border border-orange-200">
-            <h4 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-              <svg className="w-6 h-6 text-orange-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Cost Summary
-            </h4>
-            <div className="space-y-6">
-              {(() => {
-                const costBreakdown = calculateTotalCost();
-                return (
-                  <div className="bg-white rounded-xl p-6 border border-orange-200 shadow-sm">
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-900">Product/Service</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-900">Description/Key Features</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-900">Frequency</th>
-                            <th className="text-right py-3 px-4 font-semibold text-gray-900">Cost</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {/* Section 1: Product Configuration (Products, Addons, Setup Cost & Discounts) */}
-                          {productConfigurations.length > 0 && (
-                            <>
-                              {/* Section Header */}
-                              <tr className="bg-blue-50 border-b-2 border-blue-200">
-                                <td colSpan={4} className="py-3 px-4 font-bold text-blue-900">
-                                  Product Configuration
-                                </td>
-                              </tr>
-
-                              {/* Products */}
-                              {productConfigurations.map((config, index) => {
-                                const selectedProduct = products.find(p => p.id === config.productId);
-                                if (!selectedProduct) return null;
-
-                                let planPrice = 0;
-                                let planName = '';
-                                let frequency = '';
-
-                                try {
-                                  const pricingPlans = JSON.parse(selectedProduct.pricing_plans || '[]');
-                                  const selectedPlan = pricingPlans.find((plan: any) => plan.id === config.planId);
-                                  if (selectedPlan && selectedPlan.pricingOptions) {
-                                    const pricingOption = selectedPlan.pricingOptions.find((option: any) => option.frequency === config.frequency);
-                                    if (pricingOption) {
-                                      planPrice = parseFloat(pricingOption.price) || 0;
-                                      planName = selectedPlan.name;
-                                      frequency = config.frequency;
-                                    }
-                                  }
-                                } catch (e) {
-                                  console.error('Error parsing pricing plans:', e);
-                                }
-
-                                const setupCost = config.includeSetupCost === true ? (Number(selectedProduct.setup_fee) || 0) : 0;
-                                const productDiscount = config.discountValue > 0 ?
-                                  (config.discountType === 'percentage' ? (planPrice * Number(config.discountValue) / 100) : Number(config.discountValue)) : 0;
-
-                                return (
-                                  <>
-                                    {/* Product Row */}
-                                    <tr key={`product-${index}`} className="border-b border-gray-100">
-                                      <td className="py-3 px-4 font-medium text-gray-900">
-                                        {selectedProduct.name} - {planName}
-                                      </td>
-                                      <td className="py-3 px-4 text-gray-700">
-                                        {selectedProduct.key_features || 'Key Features'}
-                                      </td>
-                                      <td className="py-3 px-4 text-gray-700">
-                                        {frequency}
-                                      </td>
-                                      <td className="py-3 px-4 text-right font-medium text-gray-900">
-                                        ₹{planPrice.toLocaleString()}
-                                      </td>
-                                    </tr>
-
-                                    {/* Setup Cost Row */}
-                                    {setupCost > 0 && (
-                                      <tr key={`setup-${index}`} className="border-b border-gray-100">
-                                        <td className="py-3 px-4 font-medium text-gray-900">
-                                          Setup Cost
-                                        </td>
-                                        <td className="py-3 px-4 text-gray-700">
-                                          One-time setup
-                                        </td>
-                                        <td className="py-3 px-4 text-gray-700">
-                                          One-time
-                                        </td>
-                                        <td className="py-3 px-4 text-right font-medium text-gray-900">
-                                          ₹{setupCost.toLocaleString()}
-                                        </td>
-                                      </tr>
-                                    )}
-
-                                    {/* Add-ons for this product */}
-                                    {(() => {
-                                      let addonDetails: Array<{
-                                        name: string;
-                                        cost: number;
-                                        frequency: string;
-                                        type: string;
-                                      }> = [];
-
-                                      try {
-                                        const customElements = JSON.parse(selectedProduct.custom_elements || '[]');
-                                        config.selectedAddons.forEach(addonId => {
-                                          const addon = customElements.find((a: any) => a.id === addonId);
-                                          if (addon) {
-                                            const addonCost = parseFloat(addon.additional_cost) || 0;
-                                            addonDetails.push({
-                                              name: addon.name,
-                                              cost: addonCost,
-                                              frequency: addon.frequency,
-                                              type: addon.type
-                                            });
-                                          }
-                                        });
-                                      } catch (e) {
-                                        console.error('Error parsing custom elements:', e);
-                                      }
-
-                                      return addonDetails.map((addon, addonIndex) => (
-                                        <tr key={`addon-${index}-${addonIndex}`} className="border-b border-gray-100">
-                                          <td className="py-3 px-4 font-medium text-gray-900">
-                                            {addon.name}
-                                          </td>
-                                          <td className="py-3 px-4 text-gray-700">
-                                            {addon.type}
-                                          </td>
-                                          <td className="py-3 px-4 text-gray-700">
-                                            {addon.frequency}
-                                          </td>
-                                          <td className="py-3 px-4 text-right font-medium text-gray-900">
-                                            ₹{addon.cost.toLocaleString()}
-                                          </td>
-                                        </tr>
-                                      ));
-                                    })()}
-
-                                    {/* Product Discount Row */}
-                                    {productDiscount > 0 && (
-                                      <tr key={`product-discount-${index}`} className="border-b border-gray-100">
-                                        <td className="py-3 px-4 text-red-600 font-medium">Discount</td>
-                                        <td className="py-3 px-4 text-gray-500"></td>
-                                        <td className="py-3 px-4 text-gray-700">{config.discountFreq || frequency}</td>
-                                        <td className="py-3 px-4 text-right text-red-600 font-medium">
-                                          -₹{productDiscount.toLocaleString()}
-                                        </td>
-                                      </tr>
-                                    )}
-                                  </>
-                                );
-                              })}
-                            </>
-                          )}
-
-                          {/* Section 2: Custom Requirements & Discounts */}
-                          {customRequirements.length > 0 && (
-                            <>
-                              {/* Section Header */}
-                              <tr className="bg-green-50 border-b-2 border-green-200">
-                                <td colSpan={4} className="py-3 px-4 font-bold text-green-900">
-                                  Custom Requirements
-                                </td>
-                              </tr>
-
-                              {/* Custom Requirements */}
-                              {customRequirements.map((req, index) => {
-                                const reqCost = parseFloat(req.price) || 0;
-                                const reqDiscount = req.discountValue > 0 ?
-                                  (req.discountType === 'percentage' ? (reqCost * Number(req.discountValue) / 100) : Number(req.discountValue)) : 0;
-
-                                return (
-                                  <>
-                                    <tr key={`requirement-${index}`} className="border-b border-gray-100">
-                                      <td className="py-3 px-4 font-medium text-gray-900">
-                                        {req.name || 'My Custom Requirement'}
-                                      </td>
-                                      <td className="py-3 px-4 text-gray-700">
-                                        {req.description}
-                                      </td>
-                                      <td className="py-3 px-4 text-gray-700">
-                                        {req.frequency}
-                                      </td>
-                                      <td className="py-3 px-4 text-right font-medium text-gray-900">
-                                        ₹{reqCost.toLocaleString()}
-                                      </td>
-                                    </tr>
-                                    {reqDiscount > 0 && (
-                                      <tr key={`requirement-discount-${index}`} className="border-b border-gray-100">
-                                        <td className="py-3 px-4 text-red-600 font-medium">Discount</td>
-                                        <td className="py-3 px-4 text-gray-500"></td>
-                                        <td className="py-3 px-4 text-gray-700">{req.discountFreq || req.frequency}</td>
-                                        <td className="py-3 px-4 text-right text-red-600 font-medium">
-                                          -₹{reqDiscount.toLocaleString()}
-                                        </td>
-                                      </tr>
-                                    )}
-                                  </>
-                                );
-                              })}
-                            </>
-                          )}
-
-                          {/* Section 3: Overall Discounts */}
-                          {discounts.length > 0 && (
-                            <>
-                              {/* Section Header */}
-                              <tr className="bg-purple-50 border-b-2 border-purple-200">
-                                <td colSpan={4} className="py-3 px-4 font-bold text-purple-900">
-                                  Overall Discounts
-                                </td>
-                              </tr>
-
-                              {/* Overall Discounts */}
-                              {discounts.map((discount, index) => {
-                                const discountAmount = discount.type === 'percentage' ?
-                                  (costBreakdown.total * discount.value / 100) : discount.value;
-
-                                return (
-                                  <tr key={`overall-discount-${index}`} className="border-b border-gray-100">
-                                    <td className="py-3 px-4 font-medium text-red-600">Discount</td>
-                                    <td className="py-3 px-4 text-gray-500">{discount.description}</td>
-                                    <td className="py-3 px-4 text-gray-700">{discount.discountFreq || 'One time'}</td>
-                                    <td className="py-3 px-4 text-right text-red-600 font-medium">
-                                      {discount.type === 'percentage' ? `-${discount.value}%` : `-₹${discountAmount.toLocaleString()}`}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Cost Summary by Period */}
-                    <div className="mt-6 space-y-4">
-                      {(() => {
-                        const costByPeriod = calculateCostByPeriod();
-                        const hasAnyCost = costByPeriod.oneTime > 0 || costByPeriod.monthly > 0 || costByPeriod.quarterly > 0 || costByPeriod.yearly > 0;
-                        
-                        if (!hasAnyCost) {
-                          return (
-                            <div className="text-center py-8">
-                              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              <p className="text-gray-500">Add products and configurations to see cost breakdown</p>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl p-6 border border-orange-200">
-                            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                              <svg className="w-5 h-5 text-orange-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                              </svg>
-                              Cost Summary
-                            </h3>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                              {/* One-Time Cost */}
-                              {costByPeriod.oneTime > 0 && (
-                                <div className="bg-white rounded-xl p-4 border border-orange-200 shadow-sm">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-gray-600">One-Time Cost</span>
-                                    <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                    </svg>
-                                  </div>
-                                  <div className="text-2xl font-bold text-orange-600">₹{costByPeriod.oneTime.toLocaleString()}</div>
-                                  <p className="text-xs text-gray-500 mt-1">Setup fees & one-time items</p>
-                                </div>
-                              )}
-
-                              {/* Yearly Total */}
-                              {costByPeriod.yearly > 0 && (
-                                <div className="bg-white rounded-xl p-4 border border-purple-200 shadow-sm">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-gray-600">Yearly Total</span>
-                                    <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </div>
-                                  <div className="text-2xl font-bold text-purple-600">₹{costByPeriod.yearly.toLocaleString()}</div>
-                                  <p className="text-xs text-gray-500 mt-1">Per year</p>
-                                </div>
-                              )}
-
-                              {/* Quarterly Total */}
-                              {costByPeriod.quarterly > 0 && (
-                                <div className="bg-white rounded-xl p-4 border border-green-200 shadow-sm">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-gray-600">Quarterly Total</span>
-                                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                    </svg>
-                                  </div>
-                                  <div className="text-2xl font-bold text-green-600">₹{costByPeriod.quarterly.toLocaleString()}</div>
-                                  <p className="text-xs text-gray-500 mt-1">Per quarter</p>
-                                </div>
-                              )}
-
-                              {/* Monthly Total */}
-                              {costByPeriod.monthly > 0 && (
-                                <div className="bg-white rounded-xl p-4 border border-blue-200 shadow-sm">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-gray-600">Monthly Total</span>
-                                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </div>
-                                  <div className="text-2xl font-bold text-blue-600">₹{costByPeriod.monthly.toLocaleString()}</div>
-                                  <p className="text-xs text-gray-500 mt-1">Per month</p>
-                                </div>
-                              )}
-                            </div>
-
-
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
+          <QuoteCostSummary
+            products={products}
+            productConfigurations={productConfigurations}
+            customRequirements={customRequirements}
+            discounts={discounts}
+          />
 
           {/* Form Actions */}
           <div className="flex justify-between items-center pt-6 border-t border-gray-200">

@@ -1,2 +1,6 @@
-company_name,company_email,phone,address,default_currency,default_tax_rate,terms_and_conditions,footer_message
-GrowthJockey,contact@techcorp.com,+91 (54455) 123-4567,"123 Business Street, Suite 100, City, State 12345",INR,18,Standard terms and conditions apply. Payment is due within 30 days of invoice date. Late payments may incur additional fees.,Thank you for considering our services. Please contact us for any questions.
+company_name,company_email,phone,address,default_currency,default_tax_rate,validity_days,terms_and_conditions,footer_message
+GrowthJockey,compliance@growthjockey.com,+91 6006324328,"10th Floor, Tower A, Signature Tower, Sector 30, Gurugram",INR,18,,"• Standard terms and conditions apply.
+• Payment is due within 30 days of the invoice date.
+• Late payments may incur additional fees.
+• lsdfjdls
+• lsdfjdls",Thank you for considering our services. Please contact us for any questions. hel;p

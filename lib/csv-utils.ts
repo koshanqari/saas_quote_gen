@@ -30,9 +30,9 @@ export interface QuoteConfig {
   default_tax_rate: number;
   
   // Template Settings
+  validity_days: number;
   terms_and_conditions: string;
   footer_message: string;
-  validity_days?: number; // Optional for backward compatibility
 }
 
 export interface Quote {
@@ -42,6 +42,7 @@ export interface Quote {
   total: number;
   date: string;
   valid_until: string;
+  quotation_num?: string;
 }
 
 export interface QuoteItem {
@@ -122,6 +123,7 @@ export async function readQuoteConfig(): Promise<QuoteConfig> {
       address: '123 Business Street, Suite 100, City, State 12345',
       default_currency: 'USD',
       default_tax_rate: 0,
+      validity_days: 30,
       terms_and_conditions: 'Standard terms and conditions apply. Payment is due within 30 days of invoice date.',
       footer_message: 'Thank you for considering our services.',
     };
@@ -138,6 +140,7 @@ export async function readQuoteConfig(): Promise<QuoteConfig> {
           address: row.address || '123 Business Street, Suite 100, City, State 12345',
           default_currency: row.default_currency || 'USD',
           default_tax_rate: parseFloat(row.default_tax_rate) || 0,
+          validity_days: parseInt(row.validity_days) || 30,
           terms_and_conditions: row.terms_and_conditions || 'Standard terms and conditions apply.',
           footer_message: row.footer_message || 'Thank you for considering our services.',
         });
@@ -161,6 +164,7 @@ export async function writeQuoteConfig(config: QuoteConfig): Promise<void> {
       { id: 'address', title: 'address' },
       { id: 'default_currency', title: 'default_currency' },
       { id: 'default_tax_rate', title: 'default_tax_rate' },
+      { id: 'validity_days', title: 'validity_days' },
       { id: 'terms_and_conditions', title: 'terms_and_conditions' },
       { id: 'footer_message', title: 'footer_message' },
     ],
@@ -235,4 +239,11 @@ export function calculateQuoteTotal(items: QuoteItem[]): number {
     const discount = itemTotal * (item.discount / 100);
     return total + (itemTotal - discount);
   }, 0);
+}
+
+export function generateQuotationNumber(existingQuotes: Quote[]): string {
+  const currentYear = new Date().getFullYear();
+  const generatedQuotes = existingQuotes.filter(q => q.quotation_num);
+  const nextNumber = generatedQuotes.length + 1;
+  return `Q-${currentYear}-${nextNumber.toString().padStart(3, '0')}`;
 } 

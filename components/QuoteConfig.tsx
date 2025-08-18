@@ -11,6 +11,7 @@ export default function QuoteConfigComponent() {
     address: '',
     default_currency: 'USD',
     default_tax_rate: 0,
+    validity_days: 30,
     terms_and_conditions: '',
     footer_message: '',
   });
@@ -215,22 +216,92 @@ export default function QuoteConfigComponent() {
             Template Settings
           </h3>
           <div className="space-y-4">
+            {/* Valid For Section */}
             <div>
-              <label htmlFor="termsAndConditions" className="block text-sm font-medium text-gray-700 mb-2">
-                Terms and Conditions
+              <label htmlFor="validityDays" className="block text-sm font-medium text-gray-700 mb-2">
+                Valid For (Days)
               </label>
+              <input
+                type="number"
+                id="validityDays"
+                min="1"
+                max="365"
+                value={config.validity_days === 0 ? '' : config.validity_days}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setConfig({ 
+                    ...config, 
+                    validity_days: value === '' ? 30 : parseInt(value) || 30 
+                  });
+                }}
+                className="input-field w-32"
+                placeholder="30"
+                required
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Number of days this quote will be valid from the date of issue
+              </p>
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label htmlFor="termsAndConditions" className="block text-sm font-medium text-gray-700">
+                  Terms and Conditions
+                </label>
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const lines = config.terms_and_conditions.split('\n').filter(line => line.trim());
+                      const bulletPoints = lines.map(line => `• ${line.trim()}`).join('\n');
+                      setConfig({ ...config, terms_and_conditions: bulletPoints });
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-medium rounded-lg transition-colors duration-200"
+                    title="Convert to bullet points"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2h-1l-4-4z" />
+                    </svg>
+                    Add Bullets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const lines = config.terms_and_conditions.split('\n').filter(line => line.trim());
+                      const noBullets = lines.map(line => line.replace(/^•\s*/, '')).join('\n');
+                      setConfig({ ...config, terms_and_conditions: noBullets });
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg transition-colors duration-200"
+                    title="Remove bullet points"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Remove Bullets
+                  </button>
+                </div>
+              </div>
               <textarea
                 id="termsAndConditions"
                 value={config.terms_and_conditions}
                 onChange={(e) => setConfig({ ...config, terms_and_conditions: e.target.value })}
                 className="input-field"
                 rows={6}
-                placeholder="Enter your terms and conditions that will appear on all quotes"
+                placeholder="Enter your terms and conditions that will appear on all quotes. You can use the 'Add Bullets' button to convert each line to bullet points."
                 required
               />
               <p className="text-sm text-gray-500 mt-1">
-                This text will appear on all generated quotes
+                This text will appear on all generated quotes. Use the 'Add Bullets' button to convert each line to bullet points.
               </p>
+              
+              {/* Bullet Points Preview */}
+              {config.terms_and_conditions && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">Preview:</h5>
+                  <div className="text-sm text-gray-600 whitespace-pre-line">
+                    {config.terms_and_conditions}
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label htmlFor="footerMessage" className="block text-sm font-medium text-gray-700 mb-2">
@@ -281,6 +352,7 @@ export default function QuoteConfigComponent() {
             <div>
               <h4 className="font-medium text-gray-900 mb-2">Template Settings</h4>
               <div className="space-y-2 text-sm">
+                <div><span className="font-medium">Valid For:</span> {config.validity_days} days</div>
                 <div><span className="font-medium">Terms & Conditions:</span> {config.terms_and_conditions ? 'Set' : 'Not set'}</div>
                 <div><span className="font-medium">Footer Message:</span> {config.footer_message ? 'Set' : 'Not set'}</div>
               </div>

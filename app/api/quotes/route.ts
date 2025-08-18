@@ -18,6 +18,7 @@ interface Quote {
   discounts: string;
   createdAt: string;
   status: string;
+  quotation_num?: string;
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -47,6 +48,7 @@ async function readQuotes(): Promise<Quote[]> {
           discounts: row.discounts || '[]',
           createdAt: row.createdAt,
           status: row.status,
+          quotation_num: row.quotation_num || '',
         });
       })
       .on('end', () => resolve(quotes))
@@ -56,38 +58,64 @@ async function readQuotes(): Promise<Quote[]> {
 
 async function addQuote(quote: Omit<Quote, 'id'>): Promise<void> {
   const quotes = await readQuotes();
+  
+  // Generate quotation number if status is 'generated'
+  let quotation_num = '';
+  if (quote.status === 'generated') {
+    const currentYear = new Date().getFullYear();
+    const generatedQuotes = quotes.filter(q => q.status === 'generated');
+    const nextNumber = generatedQuotes.length + 1;
+    quotation_num = `Q-${currentYear}-${nextNumber.toString().padStart(3, '0')}`;
+  }
+  
   const newQuote: Quote = {
     id: (quotes.length + 1).toString(),
     ...quote,
+    quotation_num,
   };
 
-  const csvWriter = createObjectCsvWriter({
-    path: QUOTES_FILE,
-    header: [
-      { id: 'id', title: 'id' },
-      { id: 'clientName', title: 'clientName' },
-      { id: 'clientEmail', title: 'clientEmail' },
-      { id: 'companyName', title: 'companyName' },
-      { id: 'phoneNumber', title: 'phoneNumber' },
-      { id: 'quoteReference', title: 'quoteReference' },
-      { id: 'projectTimeline', title: 'projectTimeline' },
-      { id: 'additionalNotes', title: 'additionalNotes' },
-      { id: 'customRequirements', title: 'customRequirements' },
-      { id: 'productConfigurations', title: 'productConfigurations' },
-      { id: 'discounts', title: 'discounts' },
-      { id: 'createdAt', title: 'createdAt' },
-      { id: 'status', title: 'status' }
-    ],
-    append: true,
-  });
+        const csvWriter = createObjectCsvWriter({
+        path: QUOTES_FILE,
+        header: [
+          { id: 'id', title: 'id' },
+          { id: 'clientName', title: 'clientName' },
+          { id: 'clientEmail', title: 'clientEmail' },
+          { id: 'companyName', title: 'companyName' },
+          { id: 'phoneNumber', title: 'phoneNumber' },
+          { id: 'quoteReference', title: 'quoteReference' },
+          { id: 'projectTimeline', title: 'projectTimeline' },
+          { id: 'additionalNotes', title: 'additionalNotes' },
+          { id: 'customRequirements', title: 'customRequirements' },
+          { id: 'productConfigurations', title: 'productConfigurations' },
+          { id: 'discounts', title: 'discounts' },
+          { id: 'createdAt', title: 'createdAt' },
+          { id: 'status', title: 'status' },
+          { id: 'quotation_num', title: 'quotation_num' }
+        ],
+        append: true,
+      });
 
   await csvWriter.writeRecords([newQuote]);
 }
 
 async function updateQuote(quoteId: string, updatedQuote: Omit<Quote, 'id'>): Promise<void> {
   const quotes = await readQuotes();
+  
+  // Generate quotation number if status is being changed to 'generated'
+  let quotation_num = updatedQuote.quotation_num || '';
+  if (updatedQuote.status === 'generated') {
+    if (!quotation_num) {
+      const currentYear = new Date().getFullYear();
+      const generatedQuotes = quotes.filter(q => 
+        q.status === 'generated' && q.id !== quoteId
+      );
+      const nextNumber = generatedQuotes.length + 1;
+      quotation_num = `Q-${currentYear}-${nextNumber.toString().padStart(3, '0')}`;
+    }
+  }
+  
   const updatedQuotes = quotes.map(quote => 
-    quote.id === quoteId ? { ...updatedQuote, id: quoteId } : quote
+    quote.id === quoteId ? { ...updatedQuote, id: quoteId, quotation_num } : quote
   );
 
   const csvWriter = createObjectCsvWriter({
@@ -105,7 +133,8 @@ async function updateQuote(quoteId: string, updatedQuote: Omit<Quote, 'id'>): Pr
       { id: 'productConfigurations', title: 'productConfigurations' },
       { id: 'discounts', title: 'discounts' },
       { id: 'createdAt', title: 'createdAt' },
-      { id: 'status', title: 'status' }
+      { id: 'status', title: 'status' },
+      { id: 'quotation_num', title: 'quotation_num' }
     ],
   });
 
@@ -131,7 +160,8 @@ async function deleteQuote(quoteId: string): Promise<void> {
       { id: 'productConfigurations', title: 'productConfigurations' },
       { id: 'discounts', title: 'discounts' },
       { id: 'createdAt', title: 'createdAt' },
-      { id: 'status', title: 'status' }
+      { id: 'status', title: 'status' },
+      { id: 'quotation_num', title: 'quotation_num' }
     ],
   });
 

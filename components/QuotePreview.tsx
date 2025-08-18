@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import QuoteCostSummary from './QuoteCostSummary';
 
 interface QuotePreviewProps {
   quote: any;
@@ -31,6 +32,8 @@ export default function QuotePreview({
   const quoteRef = useRef<HTMLDivElement>(null);
   const [showGenerateConfirmation, setShowGenerateConfirmation] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [quoteConfig, setQuoteConfig] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
 
   const isControlled = typeof isOpenExternal !== 'undefined';
   const isModalOpen = isControlled ? Boolean(isOpenExternal) : isOpen;
@@ -42,6 +45,40 @@ export default function QuotePreview({
       setIsOpen(false);
     }
   };
+
+  // Fetch quote configuration
+  useEffect(() => {
+    const fetchQuoteConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        setQuoteConfig(data);
+      } catch (error) {
+        console.error('Error fetching quote config:', error);
+      }
+    };
+    
+    if (isModalOpen) {
+      fetchQuoteConfig();
+    }
+  }, [isModalOpen]);
+
+  // Fetch products for cost calculations (to mirror QuoteForm summary)
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch('/api/products');
+        const data = await response.json();
+        setProducts(data || []);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      }
+    };
+
+    if (isModalOpen) {
+      fetchProducts();
+    }
+  }, [isModalOpen]);
 
   // Lock background scroll when modal is open
   useEffect(() => {
@@ -136,11 +173,10 @@ export default function QuotePreview({
 
   const normalizedStatus = String(quote.status || '').toLowerCase();
   const isDraft = normalizedStatus === 'draft';
-  const isCompleted = normalizedStatus === 'completed';
-  const isGenerated = normalizedStatus === 'generated' || isCompleted;
+  const isGenerated = normalizedStatus === 'generated';
 
-  // Default config values
-  const config = {
+  // Use fetched config or fallback to defaults
+  const config = quoteConfig || {
     company_name: 'Your Company Name',
     company_email: 'contact@company.com',
     phone: '+1 (555) 123-4567',
@@ -150,6 +186,212 @@ export default function QuotePreview({
 
   const validUntil = new Date();
   validUntil.setDate(validUntil.getDate() + (config.validity_days || 30));
+
+  // Parse persisted quote data (support both arrays and JSON-strings)
+  const toArray = (value: any): any[] => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      try { return JSON.parse(value); } catch { return []; }
+    }
+    return [];
+  };
+
+  const parsedProductConfigurations: Array<any> = toArray(quote.productConfigurations);
+  const parsedCustomRequirements: Array<any> = toArray(quote.customRequirements);
+  const parsedDiscounts: Array<any> = toArray(quote.discounts);
+
+  // Calculate total cost for quote summary (mirrors QuoteForm)
+  const calculateTotalCost = () => {
+    let total = 0;
+    const breakdown = {
+      products: 0,
+      setupCosts: 0,
+      addons: 0,
+      customRequirements: 0,
+      discounts: 0,
+      total: 0,
+    };
+
+    // Product configurations (plans, setup fees, addons, per-product discounts)
+    parsedProductConfigurations.forEach((config: any) => {
+      const selectedProduct = products.find((p: any) => String(p.id) === String(config.productId));
+      if (!selectedProduct) return;
+
+      // Plan price
+      try {
+        const pricingPlans = JSON.parse(selectedProduct.pricing_plans || '[]');
+        const selectedPlan = pricingPlans.find((plan: any) => String(plan.id) === String(config.planId));
+        if (selectedPlan && selectedPlan.pricingOptions) {
+          const pricingOption = selectedPlan.pricingOptions.find((option: any) => option.frequency === config.frequency);
+          if (pricingOption) {
+            const planPrice = parseFloat(pricingOption.price) || 0;
+            breakdown.products += planPrice;
+            total += planPrice;
+          }
+        }
+      } catch {}
+
+      // Setup cost
+      if (config.includeSetupCost && selectedProduct.setup_fee) {
+        const setupCost = Number(selectedProduct.setup_fee) || 0;
+        breakdown.setupCosts += setupCost;
+        total += setupCost;
+      }
+
+      // Addons
+      try {
+        const customElements = JSON.parse(selectedProduct.custom_elements || '[]');
+        (config.selectedAddons || []).forEach((addonId: string) => {
+          const addon = customElements.find((a: any) => String(a.id) === String(addonId));
+          if (addon) {
+            const addonCost = parseFloat(addon.additional_cost) || 0;
+            breakdown.addons += addonCost;
+            total += addonCost;
+          }
+        });
+      } catch {}
+
+      // Product-level discount
+      if (config.discountValue > 0) {
+        let discountAmount = 0;
+        if (config.discountType === 'percentage') {
+          discountAmount = (breakdown.products * Number(config.discountValue)) / 100;
+        } else {
+          discountAmount = Number(config.discountValue);
+        }
+        breakdown.discounts += discountAmount;
+        total -= discountAmount;
+      }
+    });
+
+    // Custom requirements
+    parsedCustomRequirements.forEach((req: any) => {
+      const requirementCost = parseFloat(req.price) || 0;
+      breakdown.customRequirements += requirementCost;
+      total += requirementCost;
+    });
+
+    // Overall discounts
+    parsedDiscounts.forEach((discount: any) => {
+      let discountAmount = 0;
+      if (discount.type === 'percentage') {
+        discountAmount = (total * Number(discount.value)) / 100;
+      } else {
+        discountAmount = Number(discount.value);
+      }
+      breakdown.discounts += discountAmount;
+      total -= discountAmount;
+    });
+
+    breakdown.total = Math.max(0, total);
+    return breakdown;
+  };
+
+  // Cost by period
+  const calculateCostByPeriod = () => {
+    const periods = { oneTime: 0, monthly: 0, quarterly: 0, yearly: 0 } as any;
+
+    // Setup fees from products
+    parsedProductConfigurations.forEach((config: any) => {
+      const selectedProduct = products.find((p: any) => String(p.id) === String(config.productId));
+      if (!selectedProduct) return;
+      if (config.includeSetupCost && selectedProduct.setup_fee) {
+        periods.oneTime += Number(selectedProduct.setup_fee) || 0;
+      }
+    });
+
+    // One-time custom requirements
+    parsedCustomRequirements.forEach((req: any) => {
+      if (req.frequency === 'one-time' || !req.frequency) {
+        periods.oneTime += parseFloat(req.price) || 0;
+      }
+    });
+
+    // Recurring product plan prices and addons per frequency
+    parsedProductConfigurations.forEach((config: any) => {
+      const selectedProduct = products.find((p: any) => String(p.id) === String(config.productId));
+      if (!selectedProduct) return;
+
+      try {
+        const pricingPlans = JSON.parse(selectedProduct.pricing_plans || '[]');
+        const selectedPlan = pricingPlans.find((plan: any) => String(plan.id) === String(config.planId));
+        if (selectedPlan && selectedPlan.pricingOptions) {
+          const pricingOption = selectedPlan.pricingOptions.find((option: any) => option.frequency === config.frequency);
+          if (pricingOption) {
+            const planPrice = parseFloat(pricingOption.price) || 0;
+            // Product-level discount
+            let discountAmount = 0;
+            if (config.discountValue > 0) {
+              discountAmount = config.discountType === 'percentage' ? (planPrice * Number(config.discountValue)) / 100 : Number(config.discountValue);
+            }
+            const finalPrice = planPrice - discountAmount;
+            switch ((config.frequency || '').toLowerCase()) {
+              case 'monthly':
+                periods.monthly += finalPrice;
+                break;
+              case 'quarterly':
+                periods.quarterly += finalPrice;
+                break;
+              case 'yearly':
+                periods.yearly += finalPrice;
+                break;
+              default:
+                periods.monthly += finalPrice;
+            }
+          }
+        }
+      } catch {}
+
+      // Addons by frequency
+      try {
+        const customElements = JSON.parse(selectedProduct.custom_elements || '[]');
+        (config.selectedAddons || []).forEach((addonId: string) => {
+          const addon = customElements.find((a: any) => String(a.id) === String(addonId));
+          if (addon) {
+            const addonCost = parseFloat(addon.additional_cost) || 0;
+            switch ((config.frequency || '').toLowerCase()) {
+              case 'monthly':
+                periods.monthly += addonCost;
+                break;
+              case 'quarterly':
+                periods.quarterly += addonCost;
+                break;
+              case 'yearly':
+                periods.yearly += addonCost;
+                break;
+              default:
+                periods.monthly += addonCost;
+            }
+          }
+        });
+      } catch {}
+    });
+
+    // Recurring custom requirements
+    parsedCustomRequirements.forEach((req: any) => {
+      if (req.frequency && req.frequency !== 'one-time') {
+        const requirementCost = parseFloat(req.price) || 0;
+        let discountAmount = 0;
+        if (req.discountValue > 0) {
+          discountAmount = req.discountType === 'percentage' ? (requirementCost * Number(req.discountValue)) / 100 : Number(req.discountValue);
+        }
+        const finalCost = requirementCost - discountAmount;
+        switch ((req.frequency || '').toLowerCase()) {
+          case 'monthly':
+            periods.monthly += finalCost;
+            break;
+          case 'quarterly':
+            periods.quarterly += finalCost;
+            break;
+          case 'yearly':
+            periods.yearly += finalCost;
+            break;
+        }
+      }
+    });
+
+    return periods;
+  };
 
   return (
     <>
@@ -177,7 +419,7 @@ export default function QuotePreview({
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                   isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
                 }`}>
-                  {isDraft ? 'Draft' : isCompleted ? 'Completed' : 'Generated'}
+                  {isDraft ? 'Draft' : 'Generated'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -264,7 +506,6 @@ export default function QuotePreview({
                 <div className="flex justify-between items-start">
                   <div>
                     <h1 className="text-3xl font-bold text-gray-900">{config.company_name}</h1>
-                    <p className="text-gray-600 mt-2">Professional SaaS Solutions</p>
                     <div className="mt-2 text-sm text-gray-600">
                       <p>{config.company_email}</p>
                       <p>{config.phone}</p>
@@ -273,6 +514,10 @@ export default function QuotePreview({
                   </div>
                   <div className="text-right">
                     <h2 className="text-2xl font-bold text-blue-600">QUOTE</h2>
+                    {/* Debug: Always show quotation number field */}
+                    <p className="text-gray-600 text-sm font-semibold">
+                      Quotation #: {quote.quotation_num || 'Not assigned'}
+                    </p>
                     <p className="text-gray-600 text-sm">Date: {formatDate(new Date())}</p>
                     <p className="text-gray-600 text-sm">Valid until: {formatDate(validUntil)}</p>
                   </div>
@@ -281,61 +526,66 @@ export default function QuotePreview({
 
               {/* Client Information */}
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">To:</h3>
-                <p className="text-gray-700 font-medium">{quote.clientName}</p>
-                {quote.companyName && (
-                  <p className="text-gray-600">{quote.companyName}</p>
-                )}
+                <div className="flex justify-between items-start">
+                  {/* Left Side - Client Details */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">To:</h3>
+                    <div className="space-y-0">
+                      <p className="text-gray-700 font-medium">{quote.clientName}</p>
+                      {quote.companyName && (
+                        <p className="text-gray-600">{quote.companyName}</p>
+                      )}
+                      {quote.clientEmail && (
+                        <p className="text-gray-600 text-sm">{quote.clientEmail}</p>
+                      )}
+                      {quote.phoneNumber && (
+                        <p className="text-gray-600 text-sm">{quote.phoneNumber}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Right Side - Project Details */}
+                  {(quote.quoteReference || quote.projectTimeline) && (
+                    <div className="text-right">
+                      {quote.quoteReference && (
+                        <div className="mb-2">
+                          <span className="text-sm font-medium text-gray-700">Project: </span>
+                          <span className="text-sm text-gray-600">{quote.quoteReference}</span>
+                        </div>
+                      )}
+                      {quote.projectTimeline && (
+                        <div className="mb-2">
+                          <span className="text-sm font-medium text-gray-700">Timeline: </span>
+                          <span className="text-sm text-gray-600">{quote.projectTimeline}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Products Table */}
+              {/* Quote Summary */}
               <div className="mb-8">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-900">Item</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-900">Price</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-900">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quote.items && quote.items.map((item: any, index: number) => (
-                      <tr key={index} className="border-b border-gray-100">
-                        <td className="py-3 px-4">
-                          <div>
-                            <p className="font-medium text-gray-900">{item.productName}</p>
-                            <p className="text-sm text-gray-600">
-                              {item.duration} {item.duration === 1 ? 'month' : 'months'}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="text-right py-3 px-4 text-gray-600">
-                          ${item.price?.toFixed(2) || '0.00'}
-                        </td>
-                        <td className="text-right py-3 px-4 font-semibold text-gray-900">
-                          ${item.total?.toFixed(2) || '0.00'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-gray-200">
-                      <td className="py-3 px-4 font-semibold text-gray-900">Total</td>
-                      <td></td>
-                      <td className="text-right py-3 px-4 font-bold text-lg text-gray-900">
-                        ${quote.total?.toFixed(2) || '0.00'}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                <QuoteCostSummary
+                  products={products}
+                  productConfigurations={parsedProductConfigurations}
+                  customRequirements={parsedCustomRequirements}
+                  discounts={parsedDiscounts}
+                />
               </div>
 
               {/* Terms and Conditions */}
               <div className="mt-8 pt-6 border-t border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Terms & Conditions</h3>
-                <p className="text-sm text-gray-600">
-                  This quote is valid for {config.validity_days} days from the date of issue. 
-                  Payment terms are net 30 days unless otherwise specified.
+                <div className="text-sm text-gray-600 whitespace-pre-line">
+                  {config.terms_and_conditions || `This quote is valid for ${config.validity_days || 30} days from the date of issue. Payment is due within 30 days of invoice date.`}
+                </div>
+              </div>
+
+              {/* Footer Message */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <p className="text-sm text-gray-600 text-center">
+                  {config.footer_message || 'Thank you for considering our services.'}
                 </p>
               </div>
             </div>

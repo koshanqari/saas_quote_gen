@@ -28,7 +28,7 @@ const sampleQuotes = [
     projectTimeline: '4 months',
     additionalNotes: 'Need responsive design, payment integration, and inventory management system. Priority on user experience and mobile optimization.',
     createdAt: '2024-01-15T10:30:00.000Z',
-    status: 'completed'
+    status: 'generated'
   },
   {
     id: '2',
@@ -52,7 +52,7 @@ const sampleQuotes = [
     projectTimeline: '8 months',
     additionalNotes: 'HIPAA compliant system for patient management, appointment scheduling, and medical records. Must include reporting and analytics dashboard.',
     createdAt: '2024-01-25T09:15:00.000Z',
-    status: 'completed'
+    status: 'generated'
   },
   {
     id: '4',
@@ -76,7 +76,7 @@ const sampleQuotes = [
     projectTimeline: '5 months',
     additionalNotes: 'Online learning platform with video streaming, quiz system, progress tracking, and certificate generation. Must support multiple languages.',
     createdAt: '2024-02-05T16:30:00.000Z',
-    status: 'completed'
+    status: 'generated'
   },
   {
     id: '6',
@@ -100,7 +100,7 @@ const sampleQuotes = [
     projectTimeline: '4 months',
     additionalNotes: 'Modern POS system with barcode scanning, receipt printing, inventory tracking, and sales reporting. Must integrate with accounting software.',
     createdAt: '2024-02-15T10:00:00.000Z',
-    status: 'completed'
+    status: 'generated'
   },
   {
     id: '8',
@@ -124,7 +124,7 @@ const sampleQuotes = [
     projectTimeline: '5 months',
     additionalNotes: 'Property listing management, tenant portal, maintenance requests, and financial reporting. Must include document management and e-signing capabilities.',
     createdAt: '2024-02-25T12:10:00.000Z',
-    status: 'completed'
+    status: 'generated'
   },
   {
     id: '10',
